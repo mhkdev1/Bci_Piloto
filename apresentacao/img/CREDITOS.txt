@@ -1,0 +1,19 @@
+Figuras de terceiros usadas no PDF. Todas permitem uso e adaptação com atribuição.
+
+cerebro_cortex_motor.png
+    Blausen.com staff (2014). "Medical gallery of Blausen Medical 2014". WikiJournal of
+    Medicine 1 (2). DOI:10.15347/wjm/2014.010. Licença CC BY 3.0.
+    Origem: Wikimedia Commons, File:Blausen 0103 Brain Sensory&Motor.png
+    Alteração: rótulos traduzidos para o português.
+
+homunculo_motor.jpg
+    Foto de Dr. Joe Kiff. Licença CC BY-SA 3.0.
+    Origem: Wikimedia Commons, File:Sensory and motor homunculi.jpg
+    Alteração: recortada para mostrar só o modelo motor.
+
+origem_do_eeg.jpg
+    Portillo-Lara R, Tahirbegi B, Chapman CAR, Goding JA, Green RA. "Mind the gap:
+    State-of-the-art technologies and applications for EEG-based brain-computer interfaces".
+    APL Bioengineering 5, 031507 (2021), figura 2. Licença CC BY 4.0.
+    Origem: Europe PMC, PMC8294859.
+    Sem alteração.

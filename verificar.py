@@ -14,8 +14,9 @@ import sys
 
 NUCLEO = ["numpy", "scipy", "pandas", "torch", "mne", "matplotlib"]
 HARDWARE = {"brainflow": "capacete (capturar.py, tempo_real.py)",
-            "serial": "órtese (pyserial)",
-            "cv2": "tela de dicas (opencv-python)"}
+            "serial": "órtese, pelo Bluetooth ou pelo cabo (pyserial)",
+            "cv2": "tela de dicas (opencv-python)",
+            "pynput": "controle manual da órtese (controle_servo_1.py)"}
 RAIZ = os.path.dirname(os.path.abspath(__file__))
 
 

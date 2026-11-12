@@ -1,0 +1,6 @@
+RESULTADO DA SESSÃO GUIADA
+  sujeito ..........: S006 | classe 'right' | limiar 0.65 | passo 0.1 s | amplitude 78°
+  tentativas .......: 0 completas
+  detectadas .......: 0
+  disparos falsos ..: 3 em 1.1 min fora das tentativas = 2.64 por minuto
+    só no bloco de descanso: 3 em 1.1 min

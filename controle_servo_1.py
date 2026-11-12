@@ -2,33 +2,49 @@ import time
 import serial
 from pynput import keyboard
 
-# >>> AJUSTE A PORTA AQUI <<<
-SERIAL_PORT = 'COM3'      # Windows: 'COM3' ... ; Linux: '/dev/ttyUSB0' ; macOS: '/dev/tty.usbserial-xxxx'
-BAUD = 115200
+import config as cfg
+from nucleo import servo
 
-ser = serial.Serial(SERIAL_PORT, BAUD, timeout=0)
+# A porta vem de config.PORTA_SERVO. Vazio = acha sozinho o ESP32 pareado por Bluetooth
+# (pelo nome em config.SERVO_BT_NOME), ou pergunta. Para forçar uma porta: 'COM11'.
+SERIAL_PORT = cfg.PORTA_SERVO or servo.achar_porta()
+BAUD = cfg.BAUD_SERVO
+
+print(f"Conectando em {SERIAL_PORT}...")
+try:
+    ser = serial.Serial(SERIAL_PORT, BAUD, timeout=0)
+except serial.SerialException as e:
+    raise SystemExit(f"Não consegui abrir {SERIAL_PORT}: {e}")
 pressed = set()
 
 print("Controles:")
 print("← = L (movimenta mão esquerda)")
 print("→ = R (movimenta mão direita)")
 print("↑ = C (descansa mão)")
-print("0..9 = define o passo (0=1°, 9=10°)")
+print("0..9 = define o passo (0=1°, 9=9°)")
 print("ESC para sair")
 
 # envia comandos contínuos a cada 50 ms enquanto teclas estiverem pressionadas
 def pump():
-    while True:
+    ultimo, resto = None, b""
+    while listener.is_alive():
         if keyboard.Key.left in pressed:
             ser.write(b'L')
         if keyboard.Key.right in pressed:
             ser.write(b'R')
+        # o firmware responde "angle=<n>" a cada byte; o eco tem que ser consumido,
+        # senão se acumula no buffer durante a sessão inteira
+        resto += ser.read_all() or b""
+        eco = servo._RE_ANGULO.findall(resto)
+        resto = resto[resto.rfind(b"\n") + 1:]      # guarda só a linha incompleta
+        if eco and eco[-1] != ultimo:
+            ultimo = eco[-1]
+            print(f"\rângulo: {int(ultimo):4d}°", end="", flush=True)
         time.sleep(0.05)  # 50 ms por passo (ajuste se quiser mais rapido/lento)
 
 def on_press(key):
     if key == keyboard.Key.esc:
-        ser.close()
-        raise SystemExit
+        return False  # para o listener; o pump sai do laço e a porta fecha no finally
 
     # setas “one-shot”
     if key == keyboard.Key.up:
@@ -56,8 +72,11 @@ if __name__ == "__main__":
 
     try:
         pump()
-    except SystemExit:
+    except KeyboardInterrupt:
         pass
+    except serial.SerialException as e:
+        print(f"\nA conexão com o ESP32 caiu: {e}")
     finally:
         if ser and ser.is_open:
             ser.close()
+        print()

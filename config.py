@@ -13,9 +13,16 @@ RAIZ = os.path.dirname(os.path.abspath(__file__))
 # =====================================================================
 # 1) HARDWARE
 # =====================================================================
-PORTA_EEG = "COM3"          # dongle da Cyton. Linux: "/dev/ttyUSB0"
-PORTA_SERVO = "COM4"        # ESP32 da órtese. "" pergunta qual usar
-BAUD_SERVO = 115200
+PORTA_EEG = "COM9"          # dongle da Cyton. Linux: "/dev/ttyUSB0"
+# ESP32 da órtese, pelo Bluetooth ou pelo cabo — o protocolo é o mesmo. Vazio: acha
+# sozinho o ESP32 pareado com o nome SERVO_BT_NOME; se não achar, lista e pergunta.
+# Para forçar uma porta (ex.: o cabo USB), escreva-a aqui: "COM11".
+PORTA_SERVO = ""
+SERVO_BT_NOME = "BCI_Ortese" # nome Bluetooth do ESP32; tem que ser o mesmo do .ino
+BAUD_SERVO = 115200         # só conta no cabo; a porta Bluetooth ignora
+SERVO_TIMEOUT_ECO_S = 1.5   # prazo para o eco `angle=<n>` chegar. No cabo chega em ms; no
+                            # Bluetooth, com o link ocioso, pode passar de 0,5 s. A leitura
+                            # termina assim que o eco chega, então não atrasa o uso normal.
 TAXA_PLACA = 250            # Cyton no dongle USB é 250 Hz fixo
 
 # Quais eletrodos, e em que ordem. A ordem importa: é a mesma que a rede viu no treino.
@@ -27,10 +34,11 @@ MAPA_CANAIS = {"C3": 0, "C4": 1, "Cz": 2}
 # 2) PROTOCOLO
 # =====================================================================
 # Durações medidas nos EDFs do eegmmidb (1800 segmentos), não tiradas do artigo —
-# a página do PhysioNet não publica os tempos por trial.
+# a página do PhysioNet não publica os tempos por 
+# trial.
 DUR_DESCANSO = 4.1          # anotação T0
 DUR_TAREFA = 4.1            # anotações T1 (mão esquerda) e T2 (mão direita)
-N_TAREFAS = 30              # trials de tarefa por sessão de captura
+N_TAREFAS = 3              # trials de tarefa por sessão de captura
 PAUSA_ESTABILIZACAO = 2     # segundos de descarte no início, antes do primeiro trial
 
 # =====================================================================
@@ -107,27 +115,30 @@ CLASSE_ACIONA = "right"           # qual classe fecha a órtese
 #
 # Mudar qualquer um destes exige mudar o .ino junto — eles têm que concordar.
 SERVO_REPOUSO = 90                # para onde o 'C' leva o servo
-SERVO_AMPLITUDE = 30              # quanto sai do repouso ao fechar; é o "30°" da órtese
-SERVO_PASSO_GRAUS = 3             # 1 a 9. Divide 30 exato -> 10 pulsos para fechar
-SERVO_INTERVALO_S = 0.05          # espera entre pulsos, igual à do controle manual
-SERVO_SENTIDO_FECHA = "R"         # 'R' ou 'L' — descubra qual fecha a SUA montagem
+SERVO_AMPLITUDE = 80             # TETO do curso, em graus a partir do repouso. --amplitude só diminui
+SERVO_PASSO_GRAUS = 1             # 1 a 9. 1° é o menor passo que o protocolo do firmware aceita
+SERVO_INTERVALO_S = 0.01          # espera entre pulsos; a velocidade é passo / intervalo.
+                                  # Na linha de comando: --intervalo 0.02 (não muda o firmware)
+SERVO_SENTIDO_FECHA = "L"         # 'R' ou 'L' — descubra qual fecha a SUA montagem
 
 # Ângulos absolutos, na escala do firmware. Derivados, não edite direto.
 ANGULO_ABERTO = SERVO_REPOUSO
 ANGULO_FECHADO = (SERVO_REPOUSO + SERVO_AMPLITUDE if SERVO_SENTIDO_FECHA == "R"
                   else SERVO_REPOUSO - SERVO_AMPLITUDE)
-# A amplitude de 30° é o limite mecânico confortável do dedo indicador na montagem
-# usada — acima disso a haste força a articulação. Não aumente sem conferir o batente
-# físico, com a órtese vazia.
-LIMIAR = 0.50                     # probabilidade mínima para acionar
+# Os 39° são 30% a mais que os 30° usados até aqui, que eram o limite confortável do dedo
+# indicador na montagem antiga. Confira o batente físico com a órtese VAZIA antes de
+# vestir: acima do limite mecânico a haste força a articulação. Para 40%, use 42 (14
+# pulsos); o passo de 3° só permite múltiplos de 3.
+LIMIAR = 0.70                     # probabilidade mínima para acionar
 # Medido em 6 runs contínuos do PhysioNet (44 cues, 740 s), passo de 0,25 s:
 #   limiar 0,60 -> 73% de detecção, 1 disparo falso a cada 16 s
 #   limiar 0,70 -> 68%,             1 a cada 29 s
-#   limiar 0,80 -> 43%,             1 a cada 53 s   <- escolhido, pelo lado seguro
-# Numa órtese, disparo falso é a mão fechando sozinha; é o erro que machuca.
+#   limiar 0,80 -> 43%,             1 a cada 53 s   <- o mais seguro dos medidos
+# Numa órtese, disparo falso é a mão fechando sozinha; é o erro que machuca. A tabela foi
+# medida com passo de 0,25 s; com um PASSO_S menor a rede é consultada mais vezes.
 
-PASSO_S = 0.25                    # intervalo entre inferências no tempo real
-SEGURA_S = 3.0                    # tempo travado depois de fechar
+PASSO_S = 0.1                    # intervalo entre inferências no tempo real
+SEGURA_S = 2.0                    # tempo travado depois de fechar
 REFRATARIO_S = 2.0                # tempo morto depois de soltar, antes de poder fechar
 
 # =====================================================================
@@ -137,7 +148,8 @@ DIR_PHYSIONET = os.path.join(RAIZ, "dados", "physionet")
 DIR_GRAVACOES = os.path.join(RAIZ, "dados", "gravacoes")
 DIR_MODELOS = os.path.join(RAIZ, "modelos")
 DIR_FIGURAS = os.path.join(RAIZ, "figuras")
-MODELO_PADRAO = os.path.join(DIR_MODELOS, "cnn2d_transicao.pt")
+DIR_LOGS = os.path.join(RAIZ, "logs")           # logs do tempo_real.py, um por sessão
+MODELO_PADRAO =os.path.join(DIR_MODELOS, "cnn2d_transicao.pt")
 
 # =====================================================================
 # 8) ARQUITETURA DA REDE

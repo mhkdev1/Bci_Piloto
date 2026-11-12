@@ -1,0 +1,7 @@
+RESULTADO DA SESSÃO GUIADA
+  sujeito ..........: S012 | classe 'right' | limiar 0.7 | passo 0.1 s | amplitude 78°
+  tentativas .......: 5 completas
+  detectadas .......: 3 (60%)
+  latência .........: mediana 2.4 s, de 1.9 a 4.9 s (do início da dica ao FECHA)
+  disparos falsos ..: 1 em 0.3 min fora das tentativas = 3.47 por minuto
+    só no bloco de descanso: 0 em 0.1 min

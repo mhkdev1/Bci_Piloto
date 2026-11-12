@@ -14,3 +14,6 @@ modelos/*.pt
 
 # Notas internas de revisão, não fazem parte do pacote publicado
 CORRECOES_metodologia.md
+
+# Logs das sessões ao vivo: dados de participante, não vão para o repositório
+logs/

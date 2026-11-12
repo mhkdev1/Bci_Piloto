@@ -140,7 +140,10 @@ def mostrar(janela, texto, seta):
     else:
         cv2.line(img, (cx - 70, cy), (cx + 70, cy), (255, 255, 255), 10)
         cv2.line(img, (cx, cy - 70), (cx, cy + 70), (255, 255, 255), 10)
-    cv2.putText(img, texto, (60, 80), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 255), 2)
+    # A fonte do OpenCV só tem ASCII: "MÃO" sairia "M??O". Tira os acentos só no desenho.
+    import unicodedata
+    ascii_ = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
+    cv2.putText(img, ascii_, (60, 80), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (255, 255, 255), 2)
     cv2.imshow(janela, img)
     if cv2.waitKey(1) == 27:
         raise KeyboardInterrupt
@@ -154,7 +157,8 @@ def drenar(placa, janela, segundos, blocos, texto, seta):
         if resta <= 0:
             break
         time.sleep(min(0.05, resta))
-        mostrar(janela, texto, seta)
+        if janela is not None:       # no terminal a dica já saiu uma vez; reimprimir inunda
+            mostrar(janela, texto, seta)
         pedaco = placa.get_board_data()
         if pedaco.shape[1]:
             blocos.append(pedaco)

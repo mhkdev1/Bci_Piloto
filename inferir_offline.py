@@ -139,7 +139,7 @@ def varredura(modelo, sinal, ev, passo, ortese=None, ritmo=False):
           + (f" | latência mediana {np.median(lat):.2f} s" if lat else ""))
     print(f"  disparos fora de cue .........: {len(falsos)}"
           + (f" (1 a cada {dur/len(falsos):.0f} s)" if falsos else ""))
-    if lat:
+    if lat and abs(np.median(lat) - cfg.MEIA_JANELA) < 0.5:   # só diz o que a medida mostra
         print(f"\n  A latência fica perto de {cfg.MEIA_JANELA:.1f} s porque é aí que a janela")
         print("  deslizante reproduz a geometria de treino: a transição no centro.")
 
@@ -163,6 +163,10 @@ def main():
                     help="com --ortese: percorre a gravação no tempo real dela, para dar "
                          "para assistir a órtese. Sem isto, a varredura corre acelerada")
     ap.add_argument("--simular-ortese", action="store_true", help="com --ortese, não abre a serial")
+    ap.add_argument("--intervalo", type=servo.arg_intervalo, default=None,
+                    help=servo.AJUDA_INTERVALO)
+    ap.add_argument("--amplitude", type=servo.arg_amplitude, default=None,
+                    help="com --ortese: quanto fecha, em graus (teto: config.SERVO_AMPLITUDE)")
     a = ap.parse_args()
 
     if a.listar:
@@ -286,7 +290,7 @@ def main():
             print(f"  {cfg.CLASSES[i]:>7s} {p[i]:6.3f} |{barra:<40s}|{marca}")
         print()
         if a.ortese:
-            ort = servo.Ortese(simular=a.simular_ortese)
+            ort = servo.Ortese(simular=a.simular_ortese, amplitude=a.amplitude, intervalo=a.intervalo)
             try:
                 idx_ac = {v: k for k, v in cfg.CLASSES.items()}[cfg.CLASSE_ACIONA]
                 if decisao == cfg.CLASSE_ACIONA and p[idx_ac] > cfg.LIMIAR:
@@ -340,7 +344,7 @@ def main():
         secao("JANELA DESLIZANTE (o que a órtese enfrentaria)")
         ort = None
         if a.ortese:
-            ort = servo.Ortese(simular=a.simular_ortese)
+            ort = servo.Ortese(simular=a.simular_ortese, amplitude=a.amplitude, intervalo=a.intervalo)
             if a.ritmo:
                 dur = len(contínuo[0]) / float(cfg.TAXA_PLACA)
                 print(f"  ritmo real ligado: isto vai levar {dur/60:.1f} min, "

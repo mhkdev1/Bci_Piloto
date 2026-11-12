@@ -34,6 +34,28 @@ Três consequências que o código abaixo trata explicitamente:
    buffer do host durante a sessão toda. Aqui o eco é lido e usado como posição real.
 
 ------------------------------------------------------------------------------
+BLUETOOTH OU CABO — O MESMO CÓDIGO
+------------------------------------------------------------------------------
+O firmware aceita o protocolo pelo cabo USB e pelo Bluetooth (perfil serial, SPP). Depois
+de pareado, o ESP32 vira uma porta COM no Windows e o resto deste módulo não enxerga a
+diferença. Três cuidados existem por causa do Bluetooth:
+
+1. A porta. O Windows cria DUAS portas COM por aparelho pareado, e só a de saída conecta.
+   Fones e mouses pareados também criam portas. Com `config.PORTA_SERVO` vazio, a porta é
+   achada pelo nome do aparelho (`config.SERVO_BT_NOME`), nunca por "a única porta
+   Bluetooth" — ver `achar_porta()`.
+
+2. A latência. O eco chega com atraso variável, e ler depois de um tempo fixo pegaria um
+   ângulo velho: a órtese em 120° com o PC achando 114°, e o próximo comando mandaria
+   pulsos a mais, passando da amplitude. `_ler_eco()` espera um eco por byte enviado.
+
+3. A queda. Um link sem fio cai sem aviso, e o PC não consegue mandar o 'C' por um link
+   que já caiu. Por isso o firmware devolve a órtese ao repouso sozinho quando percebe a
+   queda — na hora, se o programa fecha a porta; em até uns 20 s, se o link some sem se
+   desconectar (é o tempo de supervisão do Bluetooth). E `fechar()`/`abrir()` tentam
+   reconectar antes de desistir.
+
+------------------------------------------------------------------------------
 POR QUE 30 GRAUS DE AMPLITUDE
 ------------------------------------------------------------------------------
 O mecânico é o que manda: a haste da montagem usada força a articulação do dedo acima
@@ -53,18 +75,133 @@ import time
 
 import config as cfg
 
-_RE_ANGULO = re.compile(rb"angle\s*=\s*(-?\d+)")
+# Só linhas completas: no Bluetooth o eco chega picado, e "angle=12" sem o fim da linha
+# seria lido como 12 quando o firmware está mandando 120.
+_RE_ANGULO = re.compile(rb"angle\s*=\s*(-?\d+)\r?\n")
+_RE_BT_SAIDA = re.compile(r"BTHENUM\\.*&([0-9A-F]{12})_", re.I)
+
+
+def portas_bluetooth():
+    """{porta: nome do aparelho} das portas Bluetooth de SAÍDA.
+
+    O Windows cria duas portas COM para cada aparelho serial pareado. A de saída traz o
+    endereço do aparelho no hwid e é a que abre a conexão; a de entrada traz zeros e só
+    serve para o aparelho chamar o PC, o que o ESP32 não faz. O pyserial não informa o
+    nome do aparelho, que sai do registro do Windows.
+    """
+    import serial.tools.list_ports
+    saida = {}
+    for p in serial.tools.list_ports.comports():
+        m = _RE_BT_SAIDA.search(p.hwid or "")
+        if m and int(m[1], 16):
+            saida[p.device] = _nome_bluetooth(m[1].lower())
+    return saida
+
+
+def _nome_bluetooth(mac):
+    try:
+        import winreg
+        chave = "SYSTEM\\CurrentControlSet\\Services\\BTHPORT\\Parameters\\Devices\\" + mac
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, chave) as k:
+            nome = winreg.QueryValueEx(k, "Name")[0]
+    except (ImportError, OSError):
+        return ""
+    if not isinstance(nome, str):
+        nome = bytes(nome).decode(errors="ignore")
+    return nome.split("\0")[0]
+
+
+def achar_porta():
+    """Porta do ESP32 quando `config.PORTA_SERVO` está vazio.
+
+    Procura a porta Bluetooth do aparelho chamado `config.SERVO_BT_NOME`. Pelo nome, e
+    não por "a única porta Bluetooth": a porta de um fone pareado pode até conectar, e aí
+    simplesmente nunca responde. Se não achar exatamente uma, lista as portas e pergunta.
+    """
+    import serial.tools.list_ports
+    bt = portas_bluetooth()
+    achadas = [p for p, nome in bt.items() if nome == cfg.SERVO_BT_NOME]
+    if len(achadas) == 1:
+        print(f"ESP32 '{cfg.SERVO_BT_NOME}' encontrado no Bluetooth, porta {achadas[0]}")
+        return achadas[0]
+
+    portas = list(serial.tools.list_ports.comports())
+    if not portas:
+        raise SystemExit(f"Nenhuma porta serial encontrada. Pareie o ESP32 "
+                         f"'{cfg.SERVO_BT_NOME}' no Bluetooth do Windows, ou confira o cabo.")
+    print(f"  {'Mais de uma' if achadas else 'Nenhuma'} porta Bluetooth com o nome "
+          f"'{cfg.SERVO_BT_NOME}'. Portas disponíveis:")
+    for i, p in enumerate(portas):
+        if p.device in bt:
+            extra = f"  <- Bluetooth: {bt[p.device] or '?'}"
+        elif "BTHENUM" in (p.hwid or "").upper():
+            extra = "  <- Bluetooth de entrada, não conecta"
+        else:
+            extra = ""
+        print(f"  [{i}] {p.device} — {p.description}{extra}")
+    # Sem "Enter = 0": a primeira porta costuma ser a de outro aparelho Bluetooth, que abre
+    # sem erro e nunca responde — a sessão seguiria com a órtese parada.
+    while True:
+        escolha = input("Índice da porta: ").strip()
+        if escolha.isdigit() and int(escolha) < len(portas):
+            return portas[int(escolha)].device
+        print(f"  digite um número de 0 a {len(portas) - 1}")
+
+
+def amplitude_efetiva(graus=None, passo=None):
+    """Quanto a órtese sai do repouso ao fechar, em graus, já em múltiplo do passo.
+
+    `graus` vem da linha de comando (`--amplitude`) e só pode DIMINUIR o curso:
+    `config.SERVO_AMPLITUDE` é o teto, o limite mecânico conferido na montagem. Para
+    passar dele, mude o config.py de propósito, depois de conferir a órtese vazia.
+    Nenhum dos dois exige regravar o ESP32 — mas o firmware_esp32_seguro tem o próprio
+    batente (AMPLITUDE no .ino), e acima dele o servo para no batente.
+    """
+    passo = passo or cfg.SERVO_PASSO_GRAUS
+    teto = int(cfg.SERVO_AMPLITUDE)
+    graus = teto if graus is None else int(graus)
+    if not passo <= graus <= teto:
+        raise ValueError(f"amplitude deve ficar entre {passo}° (um passo) e {teto}° "
+                         f"(config.SERVO_AMPLITUDE); pedido: {graus}°")
+    return graus // passo * passo
+
+
+def arg_intervalo(texto):
+    """Tipo para argparse: `--intervalo 0.02`, a espera entre pulsos do servo, em segundos."""
+    import argparse
+    try:
+        valor = float(texto)
+    except ValueError:
+        valor = -1.0
+    if not 0 <= valor <= 1:
+        raise argparse.ArgumentTypeError(f"intervalo deve ficar entre 0 e 1 segundo; pedido: {texto}")
+    return valor
+
+
+AJUDA_INTERVALO = (f"espera entre os pulsos do servo, em segundos (padrão: config.SERVO_INTERVALO_S "
+                   f"= {cfg.SERVO_INTERVALO_S:g}). Maior = fecha mais devagar")
+
+
+def arg_amplitude(texto):
+    """Tipo para argparse: `--amplitude 20` com mensagem clara fora da faixa."""
+    import argparse
+    try:
+        amplitude_efetiva(int(texto))
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
+    return int(texto)
 
 
 class Ortese:
-    """Conexão com a órtese. Use como context manager para ela voltar ao repouso no fim.
+    """Conexão com a órtese, pelo Bluetooth ou pelo cabo. Use como context manager para ela
+    voltar ao repouso no fim.
 
         with Ortese() as o:
             o.fechar()
     """
 
     def __init__(self, porta=None, simular=False, passo_graus=None, sentido=None,
-                 verboso=True, detalhe=False):
+                 verboso=True, detalhe=False, amplitude=None, intervalo=None):
         self.simular = simular
         self.verboso = verboso
         self.detalhe = detalhe               # True imprime cada byte e cada eco
@@ -74,9 +211,16 @@ class Ortese:
             raise ValueError("sentido deve ser 'L' ou 'R'")
         self.oposto = "L" if self.sentido == "R" else "R"
         self.repouso_graus = int(cfg.SERVO_REPOUSO)
-        self.fechado_graus = int(cfg.ANGULO_FECHADO)
+        self.amplitude = amplitude_efetiva(amplitude, self.passo)
+        self.fechado_graus = (self.repouso_graus + self.amplitude if self.sentido == "R"
+                              else self.repouso_graus - self.amplitude)
+        if amplitude is not None and self.amplitude != amplitude:
+            self._log(f"  amplitude pedida {amplitude}° vira {self.amplitude}°: o servo só anda "
+                      f"em múltiplos do passo de {self.passo}°")
         self.angulo = self.repouso_graus
         self.ser = None
+        # Espera entre pulsos. É ela que dá a velocidade: passo / intervalo, em graus por segundo.
+        self.intervalo = float(cfg.SERVO_INTERVALO_S if intervalo is None else intervalo)
 
         if simular:
             self._log(f"órtese em SIMULAÇÃO — nada é enviado | repouso {self.repouso_graus}°, "
@@ -84,34 +228,26 @@ class Ortese:
             self._configurar_passo()
             return
 
-        import serial
-        porta = porta or cfg.PORTA_SERVO or self._perguntar_porta()
-        self.ser = serial.Serial(porta, cfg.BAUD_SERVO, timeout=0.2, write_timeout=0.6)
-        try:                                 # pulso DTR/RTS reinicia o ESP32
-            self.ser.setDTR(False); self.ser.setRTS(False); time.sleep(0.2)
-            self.ser.setDTR(True); self.ser.setRTS(True)
-        except Exception:
-            pass
-        time.sleep(1.8)                      # espera o boot e a mensagem inicial
-        self.ser.reset_input_buffer(); self.ser.reset_output_buffer()
-        self._configurar_passo()
-        self.repouso()                       # parte de uma posição conhecida
-        self._log(f"órtese em {porta} | repouso {self.repouso_graus}°, "
-                  f"fechado {self.fechado_graus}° (amplitude {cfg.SERVO_AMPLITUDE}°), "
-                  f"passo {self.passo}°, fecha com '{self.sentido}'")
+        self.porta = porta or cfg.PORTA_SERVO or achar_porta()
+        self._conectar()
+        self._log(f"órtese em {self.porta} | repouso {self.repouso_graus}°, "
+                  f"fechado {self.fechado_graus}° (amplitude {self.amplitude}°), "
+                  f"passo {self.passo}°, fecha com '{self.sentido}', "
+                  f"intervalo {self.intervalo:g} s ({self._velocidade()})")
 
     # ---------------- interface ----------------
     def fechar(self):
         """Fecha a mão até a amplitude configurada."""
-        return self.ir_para(self.fechado_graus)
+        return self._com_reconexao(self.ir_para, self.fechado_graus)
 
     def abrir(self):
         """Devolve a mão ao repouso."""
-        return self.repouso()
+        return self._com_reconexao(self.repouso)
 
     def repouso(self):
         """Comando 'C'. É o único ponto em que a posição é conhecida sem depender da conta."""
         antes = self.angulo
+        self._limpar_entrada()
         self._enviar(b"C")
         lido = self._ler_eco()
         self.angulo = lido if lido is not None else self.repouso_graus
@@ -132,10 +268,11 @@ class Ortese:
             return self.angulo
         letra = self.sentido if (delta > 0) == (self.sentido == "R") else self.oposto
         n = int(abs(delta) // self.passo)
+        self._limpar_entrada()
         for _ in range(n):
             self._enviar(letra.encode())
-            time.sleep(cfg.SERVO_INTERVALO_S)
-        lido = self._ler_eco()
+            time.sleep(self.intervalo)
+        lido = self._ler_eco(n)
         esperado = self.angulo + (n * self.passo if delta > 0 else -n * self.passo)
         self.angulo = lido if lido is not None else esperado
         if lido is not None and lido != esperado:
@@ -156,8 +293,65 @@ class Ortese:
             return False
 
     # ---------------- interno ----------------
+    def _conectar(self, tentativas=1):
+        """Abre a porta e leva a órtese a uma posição conhecida. Vale para cabo e Bluetooth.
+
+        `tentativas` > 1 serve à reconexão: se o ESP32 reiniciou, o Bluetooth dele leva
+        alguns segundos para voltar, e uma tentativa só falharia cedo demais.
+        """
+        import serial
+        for tentativa in range(1, tentativas + 1):
+            self._log(f"conectando à órtese em {self.porta} "
+                      f"(pelo Bluetooth leva alguns segundos)...")
+            try:
+                self.ser = serial.Serial(self.porta, cfg.BAUD_SERVO, timeout=0.2,
+                                         write_timeout=2.0)
+                try:                         # pulso DTR/RTS reinicia o ESP32 no cabo;
+                    self.ser.setDTR(False); self.ser.setRTS(False); time.sleep(0.2)
+                    self.ser.setDTR(True); self.ser.setRTS(True)   # no Bluetooth não faz nada
+                except Exception:
+                    pass
+                time.sleep(1.8)              # espera o boot (cabo) ou o link assentar (Bluetooth)
+                self.ser.reset_input_buffer(); self.ser.reset_output_buffer()
+                self._configurar_passo()
+                self.repouso()               # parte de uma posição conhecida
+                return
+            except OSError as e:             # serial.SerialException herda de OSError
+                self._fechar_porta()
+                if tentativa == tentativas:
+                    raise SystemExit(
+                        f"Não consegui conectar em {self.porta}: {e}\n"
+                        f"  Bluetooth: o ESP32 está ligado, por perto e pareado como "
+                        f"'{cfg.SERVO_BT_NOME}'?\n"
+                        f"  Cabo: confira o cabo e o driver (CP210x/CH340).\n"
+                        f"  Nos dois: feche o monitor serial da IDE do Arduino, se estiver "
+                        f"aberto.") from e
+                self._log(f"  [aviso] não conectou ({e}); tentando de novo em 2 s...")
+                time.sleep(2.0)
+
+    def _com_reconexao(self, comando, *args):
+        """Executa o comando; se a conexão caiu, reconecta e segue a sessão.
+
+        No Bluetooth a queda é um evento normal: distância, interferência, o ESP32
+        reiniciou no pico de corrente do servo. O comando interrompido não é repetido: ao
+        perder o cliente o firmware já devolveu a órtese ao repouso, e a reconexão parte do
+        repouso. São três tentativas; se todas falharem, o erro sobe e quem chamou encerra
+        pelo caminho normal.
+        """
+        try:
+            return comando(*args)
+        except OSError as e:                 # serial.SerialException herda de OSError
+            if self.ser is None:
+                raise
+            self._log(f"  [aviso] a conexão com a órtese caiu ({e}). Reconectando...")
+            self._fechar_porta()
+            self._conectar(tentativas=3)
+            self._log(f"  reconectado em {self.porta}, órtese no repouso ({self.angulo}°).")
+            return self.angulo
+
     def _configurar_passo(self):
         """Manda o dígito do passo. No firmware o dígito É o passo (só '0' vira 1)."""
+        self._limpar_entrada()
         self._enviar(str(self.passo).encode())
         self._ler_eco()
 
@@ -167,6 +361,18 @@ class Ortese:
         piso, teto = sorted((self.repouso_graus, self.fechado_graus))
         return max(piso, min(teto, alvo))
 
+    def _limpar_entrada(self):
+        """Descarta eco atrasado de um comando anterior, para não ser lido como resposta deste."""
+        if not self.simular:
+            self.ser.reset_input_buffer()
+
+    def _fechar_porta(self):
+        try:
+            if self.ser is not None:
+                self.ser.close()
+        except Exception:
+            pass
+
     def _enviar(self, token):
         if self.detalhe:
             print(f"    {'[sim] ' if self.simular else ''}TX {token.decode()}")
@@ -175,39 +381,44 @@ class Ortese:
         self.ser.write(token)                # byte solto, sem terminador
         self.ser.flush()
 
-    def _ler_eco(self, espera=0.12):
-        """Lê o `angle=<n>` que o firmware imprime. Devolve o último, ou None.
+    def _ler_eco(self, n=1):
+        """Espera os `n` ecos `angle=<n>` (um por byte enviado) e devolve o último, ou None.
 
         Ler não é opcional: o firmware responde a cada byte, e se ninguém consumir, o
         buffer do host acumula durante a sessão inteira. Aproveitamos para usar o valor
         como posição real, em vez de confiar só na contagem local.
+
+        A espera termina quando os `n` ecos chegam, ou em `config.SERVO_TIMEOUT_ECO_S`.
+        Se faltar algum, devolve None: o último eco que chegou não é a posição final, e
+        confiar nele faria o próximo comando passar da amplitude. Quem chama cai na conta.
         """
         if self.simular:
             return None
-        time.sleep(espera)
-        try:
-            bruto = self.ser.read_all() or b""
-        except Exception:
-            return None
+        # O prazo cresce com o número de pulsos: medido na órtese, o ESP32 leva uns 40 ms por
+        # comando (o PWM de 50 Hz segura cada escrita no servo), então 80 pulsos pedem ~3,2 s.
+        prazo = time.monotonic() + cfg.SERVO_TIMEOUT_ECO_S + 0.06 * n
+        bruto = b""
+        while True:
+            bruto += self.ser.read_all() or b""
+            achados = _RE_ANGULO.findall(bruto)
+            if len(achados) >= n or time.monotonic() >= prazo:
+                break
+            time.sleep(0.01)
         if self.detalhe and bruto.strip():
             print(f"    RX {bruto.strip().decode(errors='ignore')}")
-        achados = _RE_ANGULO.findall(bruto)
-        return int(achados[-1]) if achados else None
+        if len(achados) < n:
+            if achados:
+                self._log(f"  [aviso] chegaram {len(achados)} de {n} ecos em "
+                          f"{cfg.SERVO_TIMEOUT_ECO_S:g} s; seguindo pela conta do PC.")
+            return None
+        return int(achados[-1])
+
+    def _velocidade(self):
+        return f"{self.passo / self.intervalo:.0f}°/s" if self.intervalo > 0 else "sem espera"
 
     def _log(self, msg):
         if self.verboso:
             print(msg)
-
-    @staticmethod
-    def _perguntar_porta():
-        import serial.tools.list_ports
-        portas = list(serial.tools.list_ports.comports())
-        if not portas:
-            raise SystemExit("Nenhuma porta serial encontrada. Confira o cabo do ESP32.")
-        for i, p in enumerate(portas):
-            print(f"  [{i}] {p.device} — {p.description}")
-        escolha = input("Índice da porta (Enter = 0): ").strip()
-        return portas[int(escolha) if escolha else 0].device
 
     def fechar_conexao(self):
         """Devolve a mão ao repouso e desliga a serial. Chamada ao sair do `with`.
@@ -215,13 +426,14 @@ class Ortese:
         Voltar ao repouso antes de fechar a porta não é cortesia: se o processo terminar
         com a órtese fechada, ela fica fechada no dedo de alguém até o próximo comando.
         """
+        if self.ser is None:
+            return
         try:
-            if self.ser is not None:
-                self.repouso()
-                time.sleep(0.3)
-                self.ser.close()
+            self.repouso()
+            time.sleep(0.3)
         except Exception:
-            pass
+            pass                             # link morto: no Bluetooth o firmware já voltou
+        self._fechar_porta()                 # fecha mesmo se o 'C' falhou
 
     def __enter__(self):
         return self

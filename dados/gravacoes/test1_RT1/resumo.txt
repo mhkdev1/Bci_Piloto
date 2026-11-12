@@ -1,0 +1,6 @@
+RESULTADO DA SESSÃO GUIADA
+  sujeito ..........: test1 | classe 'right' | limiar 78 | passo 0.1 s | amplitude 78°
+  tentativas .......: 5 completas
+  detectadas .......: 0 (0%)
+  disparos falsos ..: 0 em 0.4 min fora das tentativas = 0.00 por minuto
+    só no bloco de descanso: 0 em 0.2 min
