@@ -113,9 +113,12 @@ CLASSE_ACIONA = "right"           # qual classe fecha a órtese
 #   '0'..'9'   passo = dígito, com '0' virando 1  (então 1 a 9 graus)
 #   e imprime "angle=<n>" a cada byte recebido
 #
-# Mudar qualquer um destes exige mudar o .ino junto — eles têm que concordar.
-SERVO_REPOUSO = 90                # para onde o 'C' leva o servo
-SERVO_AMPLITUDE = 80             # TETO do curso, em graus a partir do repouso. --amplitude só diminui
+# Com o firmware_esp32_livre gravado (SERVO_FIRMWARE_LIVRE = True), o PC manda repouso e
+# batente ao ESP32 a cada conexão: mude só aqui, sem regravar. Com o firmware antigo
+# (False), mudar REPOUSO exige mudar o .ino junto.
+SERVO_FIRMWARE_LIVRE = True       # False se o ESP32 estiver com o firmware_esp32 original
+SERVO_REPOUSO = 140               # para onde o 'C' leva o servo
+SERVO_AMPLITUDE = 10             # TETO do curso, em graus a partir do repouso. --amplitude só diminui
 SERVO_PASSO_GRAUS = 1             # 1 a 9. 1° é o menor passo que o protocolo do firmware aceita
 SERVO_INTERVALO_S = 0.01          # espera entre pulsos; a velocidade é passo / intervalo.
                                   # Na linha de comando: --intervalo 0.02 (não muda o firmware)

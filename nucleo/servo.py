@@ -313,6 +313,7 @@ class Ortese:
                     pass
                 time.sleep(1.8)              # espera o boot (cabo) ou o link assentar (Bluetooth)
                 self.ser.reset_input_buffer(); self.ser.reset_output_buffer()
+                self._configurar_firmware()
                 self._configurar_passo()
                 self.repouso()               # parte de uma posição conhecida
                 return
@@ -348,6 +349,31 @@ class Ortese:
             self._conectar(tentativas=3)
             self._log(f"  reconectado em {self.porta}, órtese no repouso ({self.angulo}°).")
             return self.angulo
+
+    def _configurar_firmware(self):
+        """Só no firmware_esp32_livre: manda repouso e limites do config.py para o ESP32.
+
+        Os limites N/X viram batente no próprio firmware, entre o repouso e o fechado desta
+        sessão. Primeiro abre 0..180, para N novo nunca ficar acima de X antigo.
+        """
+        if not getattr(cfg, "SERVO_FIRMWARE_LIVRE", False):
+            return
+        piso, teto = sorted((self.repouso_graus, self.fechado_graus))
+        linhas = ["N0", "X180", f"N{piso}", f"X{teto}", f"H{self.repouso_graus}"]
+        self._limpar_entrada()
+        for l in linhas:
+            self._enviar(f"{l}\n".encode())
+        prazo = time.monotonic() + cfg.SERVO_TIMEOUT_ECO_S
+        bruto = b""
+        while bruto.count(b"repouso=") < len(linhas) and time.monotonic() < prazo:
+            bruto += self.ser.read_all() or b""
+            time.sleep(0.01)
+        esperado = f"repouso={self.repouso_graus} min={piso} max={teto}".encode()
+        if esperado not in bruto:
+            raise SystemExit(f"O ESP32 não confirmou repouso/limites ({esperado.decode()}).\n"
+                             f"  Gravou o firmware_esp32_livre? Se é o firmware antigo, ponha "
+                             f"SERVO_FIRMWARE_LIVRE = False no config.py.")
+        self._log(f"  firmware: repouso {self.repouso_graus}°, batente {piso}..{teto}°")
 
     def _configurar_passo(self):
         """Manda o dígito do passo. No firmware o dígito É o passo (só '0' vira 1)."""

@@ -231,6 +231,7 @@ Há dois lados, e eles não se confundem:
 |---|---|---|
 | `firmware_esp32/firmware_esp32.ino` | **dentro do ESP32** | recebe os bytes (Bluetooth ou USB) e move o servo |
 | `firmware_esp32_seguro/` | dentro do ESP32 | variante com batente e retorno automático |
+| `firmware_esp32_livre/` | dentro do ESP32 | curso livre 0..180° e comandos de console (`A<n>`, `P<n>`, `N/X<n>`, `U<a>,<b>`, `?`) |
 | `controle_servo_1.py` | no PC | controle manual por teclado |
 | `nucleo/servo.py` | no PC | é quem a inferência usa |
 | `testar_ortese.py`, `testar_bluetooth.py`, `testar_amplitude.py` | no PC | testes da órtese |
