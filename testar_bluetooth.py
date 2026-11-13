@@ -7,6 +7,8 @@ testar_bluetooth.py — confere, com a órtese de verdade, se o controle pelo Bl
     python testar_bluetooth.py --ciclos 5     # mais ciclos de fechar e abrir
     python testar_bluetooth.py --detalhe      # mostra cada byte trocado
     python testar_bluetooth.py --amplitude 21 # confere um curso menor que o do config
+    python testar_bluetooth.py --intervalo 0.02   # servo mais lento
+    python testar_bluetooth.py --porta COM4 --ciclos 5 --detalhe   # combinando; serve no cabo também
 
 Usa as MESMAS peças do tempo_real.py: `nucleo.servo.Ortese` fala com o ESP32 e
 `nucleo.servo.Decisor` decide quando fechar. Só o capacete é trocado por probabilidades

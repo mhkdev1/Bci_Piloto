@@ -113,7 +113,30 @@ python treinar.py --conferir            # monta o dataset e mostra as contas, se
 python treinar.py                       # PhysioNet + gravações, 35 épocas
 python treinar.py --sujeitos 5          # subconjunto, para um teste rápido
 python treinar.py --sem-gravacoes       # só PhysioNet
+python treinar.py --so-gravacoes        # só as gravações da Cyton
 ```
+
+**Fine-tuning** com as gravações de um sujeito, partindo do modelo distribuído:
+
+```bash
+python treinar.py --so-gravacoes --sessoes SK_ --conferir     # o que vai entrar
+python treinar.py --continuar-de modelos/cnn2d_transicao.pt --so-gravacoes --sessoes SK_ --lr 1e-4 --epocas 20 --saida modelos/cnn2d_SK.pt
+python tempo_real.py --modelo modelos/cnn2d_SK.pt --sem-ortese   # testar o modelo novo
+```
+
+| opção | efeito |
+|---|---|
+| `--continuar-de CKPT` | parte dos pesos de um modelo pronto; o arquivo original não muda |
+| `--sessoes SK_R1 SK_R2` | só estas gravações; aceita o começo do nome (`SK_` pega todas do SK) |
+| `--tipo imaginar` / `--tipo executar` | só gravações de imagética, ou só de movimento real |
+| `--lr 1e-4` | taxa de aprendizado; no fine-tuning use menos que o padrão de 1e-3 |
+| `--no-final-com-tudo` | salva o modelo da melhor época, sem a fase final |
+
+O treino tem duas fases. Na primeira, 20% das janelas ficam de fora e a validação escolhe
+o número de épocas. Na segunda, o treino recomeça do mesmo ponto de partida e usa
+**todas** as janelas, inclusive as de validação; é esse o modelo salvo
+(`config.TREINO_FINAL_COM_TUDO`). O modelo final não tem medida própria: a estimativa
+dele é a validação da primeira fase.
 
 Roda na CPU. Com os 10 sujeitos deste pacote, leva alguns minutos; o modelo distribuído
 foi treinado com 105 sujeitos e levou cerca de duas horas.
@@ -164,12 +187,21 @@ python -c "import serial.tools.list_ports as p; [print(x.device,'-',x.descriptio
 ### 4. Gravar uma sessão nova
 
 ```bash
-python capturar.py --ensaio                  # sem capacete: confere tempos e formato
-python capturar.py --sujeito S006 --run R1   # ~4 minutos
+python capturar.py --ensaio --sujeito ENSAIO                # sem capacete: confere tempos e formato
+python capturar.py --sujeito S006 --run R1 --tarefas 30     # ~4 minutos
+python capturar.py --sujeito S006 --run R2 --tarefas 30 --modo direita    # só mão direita
+python capturar.py --sujeito S006 --run R3 --tarefas 30 --tipo executar   # movimento real
 ```
 
+| opção | valores | efeito |
+|---|---|---|
+| `--tarefas` | número | tarefas por sessão; cada uma vem depois de um descanso (padrão: `config.N_TAREFAS`) |
+| `--modo` | `ambas`, `esquerda`, `direita`, `descanso` | o que alterna com o descanso; `descanso` grava só descanso |
+| `--tipo` | `imaginar`, `executar` | imagética ("IMAGINE FECHAR A MÃO") ou movimento real ("FECHE A MÃO") |
+
 A gravação vai para `dados/gravacoes/S006_R1/` e já pode ser usada no treino e na
-inferência offline.
+inferência offline. Repetir o mesmo `--sujeito` e `--run` sobrescreve a sessão. O
+`--ensaio` também salva nessa pasta: apague o resultado, porque o sinal é falso.
 
 ### 5. Sessão guiada que também grava
 
@@ -230,11 +262,46 @@ Há dois lados, e eles não se confundem:
 | arquivo | onde roda | papel |
 |---|---|---|
 | `firmware_esp32/firmware_esp32.ino` | **dentro do ESP32** | recebe os bytes (Bluetooth ou USB) e move o servo |
+| `firmware_esp32_livre/firmware_esp32_livre.ino` | **dentro do ESP32** | o mesmo protocolo, com curso de 0 a 180° e ângulos definidos pelo `config.py` |
 | `firmware_esp32_seguro/` | dentro do ESP32 | variante com batente e retorno automático |
 | `firmware_esp32_livre/` | dentro do ESP32 | curso livre 0..180° e comandos de console (`A<n>`, `P<n>`, `N/X<n>`, `U<a>,<b>`, `?`) |
 | `controle_servo_1.py` | no PC | controle manual por teclado |
 | `nucleo/servo.py` | no PC | é quem a inferência usa |
 | `testar_ortese.py`, `testar_bluetooth.py`, `testar_amplitude.py` | no PC | testes da órtese |
+
+### Os dois firmwares
+
+Grave **um** dos dois, e diga qual no `config.py`:
+
+| firmware | `SERVO_FIRMWARE_LIVRE` | repouso e limites |
+|---|---|---|
+| `firmware_esp32` | `False` | repouso fixo em 90° dentro do `.ino` |
+| `firmware_esp32_livre` | `True` | o PC manda repouso e batente a cada conexão, a partir do `config.py`; ficam salvos na flash do ESP32 |
+
+Com o firmware livre, mudar ângulos é só editar o `config.py`:
+
+```python
+SERVO_REPOUSO = 140        # mão aberta
+SERVO_SENTIDO_FECHA = "L"  # fechar diminui o ângulo
+SERVO_AMPLITUDE = 120      # fecha até 20°
+```
+
+Ele também aceita comandos de console, uma letra e um número seguidos de Enter:
+
+```bash
+python -m serial.tools.miniterm COM4 115200     # Ctrl+] sai
+```
+
+| comando | efeito |
+|---|---|
+| `?` | imprime ângulo, passo, repouso, limites e pulsos |
+| `A135` | vai direto a 135° |
+| `P15` | passo de 15° (o protocolo de um byte só chega a 9) |
+| `H140` | repouso em 140° (para onde o `C` leva) |
+| `N20` / `X140` | ângulo mínimo e máximo permitidos |
+| `U500,2500` | largura dos pulsos em µs, para calibrar o curso real do servo |
+
+Feche o terminal antes de rodar os scripts: a porta só abre para um programa por vez.
 
 ### Gravando o firmware
 

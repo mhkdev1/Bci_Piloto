@@ -2,9 +2,26 @@
 """
 capturar_tempo_real.py — sessão guiada que aciona a órtese E grava o EEG para treino.
 
-    python capturar_tempo_real.py --sujeito S006                      # sessão real
-    python capturar_tempo_real.py --sujeito S006 --simular-ortese     # EEG real, órtese só no terminal
-    python capturar_tempo_real.py --ensaio --sem-ortese               # sem hardware nenhum
+------------------------------------------------------------------------------
+EXEMPLOS — um por opção
+------------------------------------------------------------------------------
+    python capturar_tempo_real.py --sujeito SK                    # sessão real: capacete + órtese
+    python capturar_tempo_real.py --sujeito SK --simular-ortese   # EEG real, órtese só no terminal
+    python capturar_tempo_real.py --sujeito SK --sem-ortese       # EEG real, sem órtese
+    python capturar_tempo_real.py --sujeito SK --ensaio --sem-ortese   # sem hardware nenhum
+    python capturar_tempo_real.py --sujeito SK --run RT5          # nome da sessão (padrão: RT1, RT2...)
+    python capturar_tempo_real.py --sujeito SK --modelo modelos/cnn2d_SK.pt   # outro modelo
+    python capturar_tempo_real.py --sujeito SK --porta COM5       # porta da CYTON
+    python capturar_tempo_real.py --sujeito SK --tentativas 10    # 10 tentativas em vez de 20
+    python capturar_tempo_real.py --sujeito SK --descanso-inicial 0   # sem o descanso inicial
+    python capturar_tempo_real.py --sujeito SK --limiar 0.7       # probabilidade mínima para fechar
+    python capturar_tempo_real.py --sujeito SK --classe left      # qual classe fecha a órtese
+    python capturar_tempo_real.py --sujeito SK --passo 0.25       # segundos entre inferências
+    python capturar_tempo_real.py --sujeito SK --amplitude 60     # fecha só 60°
+    python capturar_tempo_real.py --sujeito SK --intervalo 0.02   # servo mais lento
+    python capturar_tempo_real.py --sujeito SK --sem-tela         # dicas só no terminal
+
+Estas sessões não têm --tipo: o treinar.py as conta como imagética.
 
 É a junção do `tempo_real.py --protocolo` com o `capturar.py`, sem mudar nenhum dos dois:
 

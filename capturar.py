@@ -2,11 +2,33 @@
 """
 capturar.py — grava uma sessão nova com a Cyton.
 
-    python capturar.py --ensaio                 # sem capacete: confere tempos e formato
-    python capturar.py --sujeito S006 --run R1  # grava de verdade (~4 min)
-    python capturar.py --sujeito S006 --run R2 --modo direita   # só mão direita
-    #  --modo: ambas | esquerda | direita | descanso   (padrão: config.CAPTURA_MODO)
-    #  --tipo: imaginar | executar                     (padrão: config.CAPTURA_TIPO)
+------------------------------------------------------------------------------
+EXEMPLOS — um por opção
+------------------------------------------------------------------------------
+    python capturar.py --ensaio --sujeito ENSAIO              # placa sintética, sem capacete
+    python capturar.py --sujeito SK --run R1                  # sessão real, padrões do config
+    python capturar.py --sujeito SK --run R2 --tarefas 30     # 30 tarefas + 30 descansos (~4 min)
+    python capturar.py --sujeito SK --run R3 --modo ambas     # descanso / mão sorteada (E ou D)
+    python capturar.py --sujeito SK --run R4 --modo direita   # descanso / mão direita
+    python capturar.py --sujeito SK --run R5 --modo esquerda  # descanso / mão esquerda
+    python capturar.py --sujeito SK --run R6 --modo descanso  # só descanso, a sessão inteira
+    python capturar.py --sujeito SK --run R7 --tipo imaginar  # imagética: "IMAGINE FECHAR A MÃO"
+    python capturar.py --sujeito SK --run R8 --tipo executar  # movimento real: "FECHE A MÃO"
+    python capturar.py --sujeito SK --run R9 --porta COM5     # força a porta da Cyton
+    python capturar.py --sujeito SK --run R10 --sem-tela      # dicas só no terminal
+
+    # combinando: 30 tarefas de movimento real, só mão direita
+    python capturar.py --sujeito SK --run R11 --tarefas 30 --tipo executar --modo direita
+
+Padrões no config.py: N_TAREFAS, CAPTURA_MODO, CAPTURA_TIPO e PORTA_EEG.
+
+Três cuidados:
+  - Repetir o mesmo --sujeito e --run SOBRESCREVE a sessão anterior. Troque o --run.
+  - O --ensaio também salva em dados/gravacoes/. Apague a pasta depois (ENSAIO_R1 no
+    exemplo): o sinal é falso e o treinar.py usaria.
+  - --modo e --tipo mudam só o que é gravado. Os rótulos são sempre RE, LH e RH, e a rede
+    continua com três classes. O tipo fica na coluna `tipo` do eventos.csv, e o
+    treinar.py filtra por ele com --tipo.
 
 O que a sessão faz: mostra uma dica na tela, alternando descanso e tarefa a cada 4,1 s,
 e grava o EEG do começo ao fim sem interrupção.

@@ -4,12 +4,24 @@ inferir_offline.py — roda o modelo em dados JÁ GRAVADOS e mede a acurácia.
 
 Funciona com as duas origens, sem diferença para quem usa:
 
-    python inferir_offline.py --listar                 # o que existe em disco
-    python inferir_offline.py --sujeito S001           # um sujeito do PhysioNet
-    python inferir_offline.py --sujeito S001 --run 4   # um run só
-    python inferir_offline.py --gravacao S005_R1_cortado
-    python inferir_offline.py --sujeito S001 --ortese  # aciona a órtese de verdade
-    python inferir_offline.py --gravacao S004_R1 --ortese --simular-ortese
+    python inferir_offline.py --listar                    # o que existe em disco
+    python inferir_offline.py --sujeito S001              # um sujeito do PhysioNet
+    python inferir_offline.py --sujeito S001 --run 4      # um run só (3,4,7,8,11,12)
+    python inferir_offline.py --gravacao SK_R1            # uma sessão da Cyton
+    python inferir_offline.py --gravacao SK_R1 --modelo modelos/cnn2d_SK.pt   # outro modelo
+    python inferir_offline.py --gravacao SK_R1 --detalhe  # imprime janela a janela
+    python inferir_offline.py --gravacao SK_R1 --trials   # lista os trials (classe, índice, instante)
+    python inferir_offline.py --gravacao SK_R1 --trial right 3   # roda só o 3º trial de mão direita
+    python inferir_offline.py --gravacao SK_R1 --passo 0.25      # passo da janela deslizante, em s
+    python inferir_offline.py --gravacao SK_R1 --ortese          # aciona a órtese de verdade
+    python inferir_offline.py --gravacao SK_R1 --ortese --simular-ortese   # só imprime os comandos
+    python inferir_offline.py --gravacao SK_R1 --ortese --ritmo  # no tempo real da gravação
+    python inferir_offline.py --gravacao SK_R1 --ortese --amplitude 60   # fecha só 60°
+    python inferir_offline.py --gravacao SK_R1 --ortese --intervalo 0.02 # servo mais lento
+
+    # comparar o modelo original com um fine-tuning, numa sessão que ficou FORA do treino:
+    python inferir_offline.py --gravacao SK_R4
+    python inferir_offline.py --gravacao SK_R4 --modelo modelos/cnn2d_SK.pt
 
 Duas leituras da mesma inferência, e elas respondem perguntas diferentes:
 

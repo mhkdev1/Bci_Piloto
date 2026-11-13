@@ -9,22 +9,36 @@ plugado (`Ortese(simular=True)`).
 ------------------------------------------------------------------------------
 O PROTOCOLO É O DO FIRMWARE, NÃO O CONTRÁRIO
 ------------------------------------------------------------------------------
-Os valores aqui espelham `firmware_esp32/firmware_esp32.ino`, que é o que está gravado
-no ESP32. Ele é INCREMENTAL e trabalha na escala do próprio servo:
+Há dois firmwares, com o mesmo protocolo de um byte. Ele é INCREMENTAL e trabalha na
+escala do próprio servo:
 
-    'L'        angle = max(-30, angle - passo)
-    'R'        angle = min(180, angle + passo)
-    'C'        angle = 90              <- o repouso é 90°, o centro do curso
+    'L'        angle = max(MIN, angle - passo)
+    'R'        angle = min(MAX, angle + passo)
+    'C'        angle = REPOUSO
     '0'..'9'   passo = dígito, com '0' virando 1  (portanto 1 a 9 graus)
 
 Um byte por comando, sem terminador. Depois de cada byte recebido o firmware imprime
 `angle=<n>`.
 
+    firmware_esp32/        o original. REPOUSO = 90 fixo no .ino, MAX = 180. O MIN está
+                           como -30 no .ino, mas a biblioteca do servo trava em 0°: abaixo
+                           de zero o eco passa a mentir. config.SERVO_FIRMWARE_LIVRE = False.
+
+    firmware_esp32_livre/  curso 0..180°. REPOUSO, MIN e MAX são ajustáveis pela serial
+                           (H<n>, N<n>, X<n> + Enter) e ficam salvos na flash do ESP32.
+                           Com config.SERVO_FIRMWARE_LIVRE = True, `_configurar_firmware()`
+                           manda a cada conexão o repouso e o batente tirados do config.py
+                           — não é preciso regravar o ESP32 para mudar ângulos.
+
+    Exemplo: SERVO_REPOUSO = 140, SERVO_SENTIDO_FECHA = "L", SERVO_AMPLITUDE = 120
+             -> o PC manda N20, X140, H140: a mão abre em 140° e fecha até 20°.
+
 Três consequências que o código abaixo trata explicitamente:
 
-1. O repouso é 90°, não 0°. "Fechar 30°" quer dizer ir de 90 para 120 (ou para 60, se a
-   sua montagem fechar no outro sentido). É por isso que `config.SERVO_AMPLITUDE` existe
-   separado do ângulo absoluto.
+1. O repouso não é 0°: é `config.SERVO_REPOUSO` (90° no firmware original). "Fechar 30°"
+   com repouso em 90 quer dizer ir de 90 para 120 (ou para 60, se a sua montagem fechar
+   no outro sentido). É por isso que `config.SERVO_AMPLITUDE` existe separado do ângulo
+   absoluto.
 
 2. O dígito É o passo, não passo-1. Mandar '3' dá passos de 3°. Como o máximo é '9', não
    existe passo de 10°.

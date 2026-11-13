@@ -110,19 +110,30 @@ AUG_DESLOCAMENTO = 16             # deslocamento temporal máximo, em amostras
 # =====================================================================
 CLASSE_ACIONA = "right"           # qual classe fecha a órtese
 
-# ---- Servo: os valores abaixo espelham o firmware gravado no ESP32 ----
-# O firmware é INCREMENTAL e trabalha na escala do próprio servo, com o repouso no
-# CENTRO do curso. Ver firmware_esp32/firmware_esp32.ino:
+# ---- Servo ----
+# O firmware é INCREMENTAL e trabalha na escala do próprio servo (0 a 180°):
 #
-#   'L'        angle = max(-30, angle - passo)
-#   'R'        angle = min(180, angle + passo)
-#   'C'        angle = 90            <- repouso é 90°, não 0°
+#   'L'        angle = angle - passo, sem passar do mínimo
+#   'R'        angle = angle + passo, sem passar do máximo
+#   'C'        angle = repouso
 #   '0'..'9'   passo = dígito, com '0' virando 1  (então 1 a 9 graus)
 #   e imprime "angle=<n>" a cada byte recebido
 #
-# Com o firmware_esp32_livre gravado (SERVO_FIRMWARE_LIVRE = True), o PC manda repouso e
-# batente ao ESP32 a cada conexão: mude só aqui, sem regravar. Com o firmware antigo
-# (False), mudar REPOUSO exige mudar o .ino junto.
+# Qual firmware está gravado no ESP32 decide quem manda nos ângulos:
+#
+#   firmware_esp32_livre  (SERVO_FIRMWARE_LIVRE = True)
+#       O PC manda repouso e batente ao ESP32 a cada conexão. Mude os valores SÓ AQUI;
+#       não precisa regravar. O batente vai do repouso até o fechado da sessão.
+#   firmware_esp32        (SERVO_FIRMWARE_LIVRE = False)
+#       Repouso fixo em 90° dentro do .ino. SERVO_REPOUSO tem que ser 90, ou o .ino tem
+#       que mudar junto.
+#
+# Exemplos, com o firmware livre:
+#   REPOUSO 90,  SENTIDO "L", AMPLITUDE 80   -> abre em 90°,  fecha em 10°
+#   REPOUSO 140, SENTIDO "L", AMPLITUDE 120  -> abre em 140°, fecha em 20°
+#   REPOUSO 0,   SENTIDO "R", AMPLITUDE 180  -> abre em 0°,   fecha em 180° (curso inteiro)
+# REPOUSO e o fechado têm que caber em 0..180. Os graus são do SERVO: com a redução por
+# engrenagem, os dedos giram menos que isso.
 SERVO_FIRMWARE_LIVRE = True       # False se o ESP32 estiver com o firmware_esp32 original
 SERVO_REPOUSO = 140               # para onde o 'C' leva o servo
 SERVO_AMPLITUDE = 120             # TETO do curso, em graus a partir do repouso. --amplitude só diminui
@@ -135,10 +146,11 @@ SERVO_SENTIDO_FECHA = "L"         # 'R' ou 'L' — descubra qual fecha a SUA mon
 ANGULO_ABERTO = SERVO_REPOUSO
 ANGULO_FECHADO = (SERVO_REPOUSO + SERVO_AMPLITUDE if SERVO_SENTIDO_FECHA == "R"
                   else SERVO_REPOUSO - SERVO_AMPLITUDE)
-# Os 39° são 30% a mais que os 30° usados até aqui, que eram o limite confortável do dedo
-# indicador na montagem antiga. Confira o batente físico com a órtese VAZIA antes de
-# vestir: acima do limite mecânico a haste força a articulação. Para 40%, use 42 (14
-# pulsos); o passo de 3° só permite múltiplos de 3.
+# Confira o batente físico com a órtese VAZIA (python testar_amplitude.py) antes de vestir:
+# acima do limite mecânico a haste força a articulação. A amplitude efetiva é arredondada
+# para baixo até um múltiplo do passo: amplitude 120 com passo 9 fecha 117°.
+# Velocidade: o que mais acelera é o PASSO (menos comandos por curso), não o intervalo —
+# o ESP32 leva uns 40 ms por comando. Passo 1 = 80° em ~3 s; passo 9 = ~0,3 s.
 LIMIAR = 0.80                     # probabilidade mínima para acionar
 # Medido em 6 runs contínuos do PhysioNet (44 cues, 740 s), passo de 0,25 s:
 #   limiar 0,60 -> 73% de detecção, 1 disparo falso a cada 16 s

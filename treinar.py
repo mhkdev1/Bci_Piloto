@@ -2,13 +2,49 @@
 """
 treinar.py — treina a rede do zero, ou continua de um checkpoint.
 
-    python treinar.py                          # PhysioNet + gravações, 35 épocas
-    python treinar.py --conferir               # só monta o dataset e mostra as contas
-    python treinar.py --sem-gravacoes          # só PhysioNet
-    python treinar.py --sujeitos 20            # subconjunto, para um teste rápido
-    python treinar.py --continuar-de modelos/cnn2d_transicao.pt --so-gravacoes
-    python treinar.py ... --tipo executar      # só gravações de movimento real
-    python treinar.py ... --sessoes SK_R1      # só estas gravações (SK_ pega todas do SK)
+------------------------------------------------------------------------------
+EXEMPLOS — um por opção
+------------------------------------------------------------------------------
+    python treinar.py                               # do zero: PhysioNet + gravações
+    python treinar.py --conferir                    # só monta o dataset e mostra as contas
+    python treinar.py --sem-gravacoes               # só PhysioNet
+    python treinar.py --so-gravacoes                # só as gravações da Cyton
+    python treinar.py --sujeitos 20                 # só os 20 primeiros sujeitos do PhysioNet
+    python treinar.py --epocas 20                   # número de épocas (padrão: config.EPOCAS)
+    python treinar.py --lote 16                     # tamanho do lote (padrão: config.LOTE)
+    python treinar.py --lr 1e-4                     # taxa de aprendizado (config.TAXA_APRENDIZADO)
+    python treinar.py --saida modelos/cnn2d_SK.pt   # onde salvar (padrão: modelos/cnn2d_novo.pt)
+    python treinar.py --so-gravacoes --tipo executar        # só gravações de movimento real
+    python treinar.py --so-gravacoes --tipo imaginar        # só gravações de imagética
+    python treinar.py --so-gravacoes --sessoes SK_R1 SK_R2  # só estas sessões
+    python treinar.py --so-gravacoes --sessoes SK_          # todas que começam com SK_
+    python treinar.py --no-final-com-tudo           # salva o modelo da melhor época, sem a fase final
+    python treinar.py --continuar-de modelos/cnn2d_transicao.pt   # parte de um modelo pronto
+
+    # FINE-TUNING com as gravações de um sujeito (uma linha só):
+    python treinar.py --continuar-de modelos/cnn2d_transicao.pt --so-gravacoes --sessoes SK_ --lr 1e-4 --epocas 20 --saida modelos/cnn2d_SK.pt
+
+    # conferir antes o que entra nesse fine-tuning:
+    python treinar.py --so-gravacoes --sessoes SK_ --conferir
+
+No fine-tuning use --lr menor que o padrão (1e-4 a 3e-4): o padrão é de treino do zero e
+apaga o que o modelo aprendeu no PhysioNet. O arquivo de --continuar-de nunca é alterado.
+
+------------------------------------------------------------------------------
+AS DUAS FASES DO TREINO
+------------------------------------------------------------------------------
+1. VALIDAÇÃO. Separa config.FRACAO_VALIDACAO das janelas (20%), treina com o resto e
+   anota a época de melhor acurácia de validação.
+
+2. FINAL (config.TREINO_FINAL_COM_TUDO, ou --final-com-tudo / --no-final-com-tudo).
+   Recomeça do MESMO ponto de partida — do zero, ou do --continuar-de — e treina pelo
+   número de épocas da fase 1 com TODAS as janelas, inclusive as de validação. A
+   normalização é recalculada com todas. É este o modelo salvo.
+
+O modelo final não tem medida própria: não sobra janela que ele não tenha visto. A
+estimativa dele é a validação da fase 1, gravada no checkpoint (`validacao_estimada`).
+Com poucas janelas (uma sessão de 10 tarefas rende 4 de validação) esse número é sorte;
+o teste que vale é o inferir_offline.py numa sessão fora do treino, ou o tempo real.
 
 O checkpoint guarda os pesos, a arquitetura, a estatística de normalização e a geometria
 da janela. É o bastante para a inferência reconstruir a mesma cadeia sem depender de

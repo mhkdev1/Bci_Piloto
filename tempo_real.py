@@ -2,12 +2,32 @@
 """
 tempo_real.py — capacete ligado, órtese acionada pela intenção de movimento.
 
-    python tempo_real.py                  # com a órtese
-    python tempo_real.py --sem-ortese     # só imprime, para teste sem hardware
-    python tempo_real.py --simular-ortese # imprime o que mandaria à órtese
-    python tempo_real.py --amplitude 21   # fecha só 21° (até config.SERVO_AMPLITUDE)
-    python tempo_real.py --protocolo --sujeito S006          # sessão guiada, com resultado
-    python tempo_real.py --protocolo --ensaio --sem-ortese   # placa sintética, sem hardware
+------------------------------------------------------------------------------
+EXEMPLOS — um por opção
+------------------------------------------------------------------------------
+    python tempo_real.py                             # capacete + órtese, padrões do config
+    python tempo_real.py --sem-ortese                # só imprime; não abre a órtese
+    python tempo_real.py --simular-ortese            # imprime o que mandaria à órtese
+    python tempo_real.py --ensaio --sem-ortese       # EEG falso: sem capacete e sem órtese
+    python tempo_real.py --modelo modelos/cnn2d_SK.pt   # outro modelo (padrão: config.MODELO_PADRAO)
+    python tempo_real.py --porta COM5                # porta da CYTON (padrão: config.PORTA_EEG)
+    python tempo_real.py --sujeito SK                # nome do log em logs/
+    python tempo_real.py --limiar 0.7                # probabilidade mínima para fechar (config.LIMIAR)
+    python tempo_real.py --classe left               # qual classe fecha (config.CLASSE_ACIONA)
+    python tempo_real.py --passo 0.25                # segundos entre inferências (config.PASSO_S)
+    python tempo_real.py --amplitude 60              # fecha só 60° (teto: config.SERVO_AMPLITUDE)
+    python tempo_real.py --intervalo 0.02            # espera entre pulsos do servo: mais lento
+    python tempo_real.py --protocolo --sujeito SK    # sessão guiada, com dicas e resultado
+    python tempo_real.py --protocolo --tentativas 10 # 10 tentativas em vez de 20
+    python tempo_real.py --protocolo --descanso-inicial 0   # sem o bloco de descanso inicial
+    python tempo_real.py --protocolo --sem-tela      # dicas só no terminal
+
+    # primeiro teste de um modelo novo: sem órtese; depois com ela
+    python tempo_real.py --modelo modelos/cnn2d_SK.pt --sujeito SK --sem-ortese
+    python tempo_real.py --modelo modelos/cnn2d_SK.pt --sujeito SK
+
+A porta da ÓRTESE não é argumento: vem de config.PORTA_SERVO; vazio, o ESP32 é achado
+pelo nome Bluetooth, ou o programa lista as portas e pergunta. O --porta é o da Cyton.
 
 O laço é simples: a cada `config.PASSO_S` segundos, pega os últimos 4,1 s do stream,
 passa pela mesma cadeia do treino, classifica, e entrega a probabilidade ao `Decisor`,

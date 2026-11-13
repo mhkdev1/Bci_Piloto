@@ -3,7 +3,14 @@
 testar_ortese.py — testa a comunicação com a órtese, com ou sem hardware.
 
     python testar_ortese.py              # emula o ESP32 em software, não precisa de nada
+    python testar_ortese.py --detalhe    # idem, mostrando cada byte trocado
     python testar_ortese.py --real       # usa a órtese de verdade (Bluetooth ou cabo)
+    python testar_ortese.py --real --detalhe
+
+ATENÇÃO: o emulador imita o firmware ORIGINAL (repouso fixo em 90°, sem os comandos de
+console). Com o firmware_esp32_livre e um config.SERVO_REPOUSO diferente de 90, o modo
+emulado acusa divergências que não existem no hardware. Nesse caso use --real, ou o
+testar_amplitude.py.
 
 O modo emulado reimplementa em Python, byte a byte, a lógica do
 `firmware_esp32/firmware_esp32.ino` — incluindo os limites, o passo e o eco `angle=<n>`.

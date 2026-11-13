@@ -2,9 +2,15 @@
 """
 testar_amplitude.py — confere, na órtese de verdade, que `--amplitude` fecha o quanto pede.
 
-    python testar_amplitude.py --porta COM11                    # 9°, 18°, 27° e o teto
-    python testar_amplitude.py --porta COM11 --amplitudes 12 21 # escolhe os valores
-    python testar_amplitude.py --porta COM11 --pausa 3          # mais tempo para olhar
+    python testar_amplitude.py                                 # porta do config ou o Bluetooth
+    python testar_amplitude.py --porta COM4                    # 9°, 18°, 27° e o teto do config
+    python testar_amplitude.py --porta COM4 --amplitudes 30 60 90 120   # escolhe os valores
+    python testar_amplitude.py --porta COM4 --pausa 3          # 3 s fechada e 3 s aberta
+    python testar_amplitude.py --porta COM4 --intervalo 0.02   # servo mais lento
+
+As amplitudes são contadas a partir de config.SERVO_REPOUSO, no sentido de
+config.SERVO_SENTIDO_FECHA, e não passam de config.SERVO_AMPLITUDE. Cada uma é
+arredondada para baixo até um múltiplo de config.SERVO_PASSO_GRAUS.
 
 Para cada amplitude, conecta como o tempo_real.py faz (`Ortese(amplitude=...)`), fecha,
 pergunta ao FIRMWARE onde o servo está, pede 60° além do fechado para conferir que não

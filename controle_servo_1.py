@@ -1,3 +1,26 @@
+# -*- coding: utf-8 -*-
+"""
+controle_servo_1.py — controle manual da órtese pelo teclado.
+
+    python controle_servo_1.py
+
+Não tem argumentos. A porta vem de config.PORTA_SERVO; vazio, o ESP32 é achado pelo nome
+Bluetooth (config.SERVO_BT_NOME), ou o programa lista as portas e pergunta.
+
+    seta ESQUERDA   manda 'L' enquanto pressionada: o ângulo diminui um passo por vez
+    seta DIREITA    manda 'R' enquanto pressionada: o ângulo aumenta
+    seta CIMA       manda 'C': volta ao repouso
+    0 a 9           tamanho do passo, em graus (0 vira 1)
+    ESC             sai
+
+Este script fala direto com o ESP32, sem passar pelo `nucleo.servo.Ortese`. Então ele NÃO
+manda repouso nem batente do config.py: valem os que estão salvos no ESP32 (firmware
+livre) ou os fixos do .ino (firmware original). Para ajustar esses valores à mão, use o
+console do firmware livre:
+
+    python -m serial.tools.miniterm COM4 115200
+    ?  A90  P15  H140  N20  X140  U500,2500      (cada um seguido de Enter; Ctrl+] sai)
+"""
 import time
 import serial
 from pynput import keyboard
