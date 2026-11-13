@@ -39,6 +39,10 @@ MAPA_CANAIS = {"C3": 0, "C4": 1, "Cz": 2}
 DUR_DESCANSO = 4.1          # anotação T0
 DUR_TAREFA = 4.1            # anotações T1 (mão esquerda) e T2 (mão direita)
 N_TAREFAS = 3              # trials de tarefa por sessão de captura
+CAPTURA_MODO = "ambas"     # capturar.py: "ambas", "esquerda", "direita" ou "descanso".
+                           # Sempre alterna com descanso; "descanso" grava só descanso.
+CAPTURA_TIPO = "imaginar"  # "imaginar" (imagética) ou "executar" (movimento real). Os
+                           # rótulos são os mesmos; o tipo fica na coluna `tipo` do eventos.csv.
 PAUSA_ESTABILIZACAO = 2     # segundos de descarte no início, antes do primeiro trial
 
 # =====================================================================

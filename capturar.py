@@ -4,6 +4,9 @@ capturar.py — grava uma sessão nova com a Cyton.
 
     python capturar.py --ensaio                 # sem capacete: confere tempos e formato
     python capturar.py --sujeito S006 --run R1  # grava de verdade (~4 min)
+    python capturar.py --sujeito S006 --run R2 --modo direita   # só mão direita
+    #  --modo: ambas | esquerda | direita | descanso   (padrão: config.CAPTURA_MODO)
+    #  --tipo: imaginar | executar                     (padrão: config.CAPTURA_TIPO)
 
 O que a sessão faz: mostra uma dica na tela, alternando descanso e tarefa a cada 4,1 s,
 e grava o EEG do começo ao fim sem interrupção.
@@ -53,9 +56,16 @@ import pandas as pd
 import config as cfg
 
 DICAS = {
-    "RE": ("DESCANSE", "cross"),
-    "LH": ("IMAGINE FECHAR A MÃO ESQUERDA", "left"),
-    "RH": ("IMAGINE FECHAR A MÃO DIREITA", "right"),
+    "imaginar": {
+        "RE": ("DESCANSE", "cross"),
+        "LH": ("IMAGINE FECHAR A MÃO ESQUERDA", "left"),
+        "RH": ("IMAGINE FECHAR A MÃO DIREITA", "right"),
+    },
+    "executar": {                 # movimento real: mesmos rótulos, como os runs 3/7/11 do eegmmidb
+        "RE": ("DESCANSE", "cross"),
+        "LH": ("FECHE A MÃO ESQUERDA", "left"),
+        "RH": ("FECHE A MÃO DIREITA", "right"),
+    },
 }
 
 
@@ -92,17 +102,24 @@ class PlacaSimulada:
         pass
 
 
-def sequencia(n_tarefas, semente=None):
-    """Alterna descanso e tarefa, começando por descanso. Mãos balanceadas e embaralhadas."""
+MODOS = {                     # o que entra no lugar de cada tarefa, sempre após um descanso
+    "ambas":    ["LH", "RH"],     # esquerda e direita balanceadas e embaralhadas
+    "esquerda": ["LH"],
+    "direita":  ["RH"],
+    "descanso": ["RE"],           # só descanso: a sessão inteira vira classe rest
+}
+
+
+def sequencia(n_tarefas, modo="ambas", semente=None):
+    """Alterna descanso e tarefa, começando por descanso. Em "ambas", mãos balanceadas."""
     if semente is not None:
         random.seed(semente)
-    mãos = ["LH", "RH"] * (n_tarefas // 2 + 1)
-    mãos = mãos[:n_tarefas]
-    random.shuffle(mãos)
+    tarefas = (MODOS[modo] * (n_tarefas // len(MODOS[modo]) + 1))[:n_tarefas]
+    random.shuffle(tarefas)
     seq = []
-    for m in mãos:
+    for t in tarefas:
         seq.append("RE")
-        seq.append(m)
+        seq.append(t)
     return seq
 
 
@@ -169,6 +186,10 @@ def main():
     ap.add_argument("--sujeito", default="S001")
     ap.add_argument("--run", default="R1")
     ap.add_argument("--tarefas", type=int, default=cfg.N_TAREFAS)
+    ap.add_argument("--modo", choices=list(MODOS), default=cfg.CAPTURA_MODO,
+                    help="ambas | esquerda | direita | descanso (padrão: config.CAPTURA_MODO)")
+    ap.add_argument("--tipo", choices=list(DICAS), default=cfg.CAPTURA_TIPO,
+                    help="imaginar | executar (padrão: config.CAPTURA_TIPO)")
     ap.add_argument("--porta", default=None)
     ap.add_argument("--ensaio", action="store_true", help="placa sintética, sem hardware")
     ap.add_argument("--sem-tela", action="store_true", help="dicas só no terminal")
@@ -199,11 +220,11 @@ def main():
         except ImportError:
             print("[aviso] opencv-python não instalado; dicas só no terminal.")
 
-    seq = sequencia(a.tarefas)
+    seq = sequencia(a.tarefas, a.modo)
     total = sum(cfg.DUR_DESCANSO if c == "RE" else cfg.DUR_TAREFA for c in seq)
     print("=" * 70)
-    print(f"  {a.sujeito} {a.run} | {a.tarefas} tarefas + {a.tarefas} descansos "
-          f"= {len(seq)} segmentos | {total/60:.1f} min")
+    print(f"  {a.sujeito} {a.run} | {a.tipo} | modo {a.modo} | {a.tarefas} tarefas + {a.tarefas} "
+          f"descansos = {len(seq)} segmentos | {total/60:.1f} min")
     print(f"  {taxa:g} Hz | canais {cfg.CANAIS} | segmentos de {cfg.DUR_TAREFA:g} s")
     print("  Stream contínuo: nada é descartado depois da estabilização. ESC encerra.")
     print("=" * 70)
@@ -217,7 +238,7 @@ def main():
     t_zero = time.time()
     try:
         for i, code in enumerate(seq, 1):
-            texto, seta = DICAS[code]
+            texto, seta = DICAS[a.tipo][code]
             mostrar(janela, texto, seta)
             eventos.append({"trial_index": i, "code": code, "t_onset": time.time()})
             print(f"  [{i:2d}/{len(seq)}] {code}  {texto:32s} t={time.time()-t_zero:6.1f}s")
@@ -276,7 +297,7 @@ def main():
         saida[f"{c}_uV"] = np.round(limpo[:, k], 1)
     saida.to_csv(os.path.join(pasta, "continuo.csv"), index=False)
     pd.DataFrame([{"trial_index": e["trial_index"], "code": e["code"],
-                   "amostra_inicio": ini, "t_s": round(ini / taxa, 4)}
+                   "amostra_inicio": ini, "t_s": round(ini / taxa, 4), "tipo": a.tipo}
                   for e, ini in zip(eventos, inicios)]).to_csv(
         os.path.join(pasta, "eventos.csv"), index=False)
 

@@ -7,6 +7,7 @@ treinar.py — treina a rede do zero, ou continua de um checkpoint.
     python treinar.py --sem-gravacoes          # só PhysioNet
     python treinar.py --sujeitos 20            # subconjunto, para um teste rápido
     python treinar.py --continuar-de modelos/cnn2d_transicao.pt --so-gravacoes
+    python treinar.py ... --tipo executar      # só gravações de movimento real
 
 O checkpoint guarda os pesos, a arquitetura, a estatística de normalização e a geometria
 da janela. É o bastante para a inferência reconstruir a mesma cadeia sem depender de
@@ -32,7 +33,15 @@ from nucleo import dados, preproc
 from nucleo.modelo import CNN2D
 
 
-def montar_dataset(usar_edf=True, usar_gravacoes=True, limite_sujeitos=None, quieto=False):
+def tipo_sessao(pasta):
+    """'imaginar' ou 'executar'. Gravações anteriores à coluna `tipo` eram todas imagética."""
+    import pandas as pd
+    ev = pd.read_csv(os.path.join(pasta, "eventos.csv"), nrows=1)
+    return str(ev["tipo"].iloc[0]) if "tipo" in ev.columns and len(ev) else "imaginar"
+
+
+def montar_dataset(usar_edf=True, usar_gravacoes=True, limite_sujeitos=None, quieto=False,
+                   tipo=None):
     """(X, y, origem). origem: 0 = PhysioNet, 1 = gravação da Cyton."""
     Xs, ys, origens = [], [], []
 
@@ -55,13 +64,16 @@ def montar_dataset(usar_edf=True, usar_gravacoes=True, limite_sujeitos=None, qui
     if usar_gravacoes:
         n = 0
         for sessao in dados.sessoes_gravadas():
-            saida = dados.janelas_gravacao(os.path.join(cfg.DIR_GRAVACOES, sessao))
+            pasta = os.path.join(cfg.DIR_GRAVACOES, sessao)
+            if tipo and tipo_sessao(pasta) != tipo:
+                continue
+            saida = dados.janelas_gravacao(pasta)
             if saida is None:
                 continue
             X, y, _ = saida
             Xs.append(X); ys.append(y); origens.append(np.ones(len(y), np.int64))
             n += len(y)
-            print(f"Gravação {sessao}: {len(y)} janelas")
+            print(f"Gravação {sessao} ({tipo_sessao(pasta)}): {len(y)} janelas")
         if n == 0:
             print("Gravações: nenhuma encontrada em dados/gravacoes/")
 
@@ -165,6 +177,8 @@ def main():
     ap.add_argument("--so-gravacoes", action="store_true", help="só as gravações da Cyton")
     ap.add_argument("--continuar-de", default=None, metavar="CKPT",
                     help="parte dos pesos deste checkpoint (o original não é alterado)")
+    ap.add_argument("--tipo", choices=["imaginar", "executar"], default=None,
+                    help="só gravações deste tipo (padrão: todas)")
     ap.add_argument("--conferir", action="store_true", help="monta o dataset e para")
     a = ap.parse_args()
 
@@ -178,7 +192,7 @@ def main():
 
     X, y, origem = montar_dataset(usar_edf=not a.so_gravacoes,
                                   usar_gravacoes=not a.sem_gravacoes,
-                                  limite_sujeitos=a.sujeitos)
+                                  limite_sujeitos=a.sujeitos, tipo=a.tipo)
     contagem = np.bincount(y, minlength=len(cfg.CLASSES))
     print(f"\nDataset: {len(y)} janelas | "
           f"{ {cfg.CLASSES[i]: int(contagem[i]) for i in range(len(contagem))} }")
