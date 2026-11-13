@@ -8,6 +8,7 @@ treinar.py — treina a rede do zero, ou continua de um checkpoint.
     python treinar.py --sujeitos 20            # subconjunto, para um teste rápido
     python treinar.py --continuar-de modelos/cnn2d_transicao.pt --so-gravacoes
     python treinar.py ... --tipo executar      # só gravações de movimento real
+    python treinar.py ... --sessoes SK_R1      # só estas gravações (SK_ pega todas do SK)
 
 O checkpoint guarda os pesos, a arquitetura, a estatística de normalização e a geometria
 da janela. É o bastante para a inferência reconstruir a mesma cadeia sem depender de
@@ -41,7 +42,7 @@ def tipo_sessao(pasta):
 
 
 def montar_dataset(usar_edf=True, usar_gravacoes=True, limite_sujeitos=None, quieto=False,
-                   tipo=None):
+                   tipo=None, sessoes=None):
     """(X, y, origem). origem: 0 = PhysioNet, 1 = gravação da Cyton."""
     Xs, ys, origens = [], [], []
 
@@ -65,6 +66,8 @@ def montar_dataset(usar_edf=True, usar_gravacoes=True, limite_sujeitos=None, qui
         n = 0
         for sessao in dados.sessoes_gravadas():
             pasta = os.path.join(cfg.DIR_GRAVACOES, sessao)
+            if sessoes and not any(sessao.startswith(n) for n in sessoes):
+                continue
             if tipo and tipo_sessao(pasta) != tipo:
                 continue
             saida = dados.janelas_gravacao(pasta)
@@ -179,6 +182,8 @@ def main():
                     help="parte dos pesos deste checkpoint (o original não é alterado)")
     ap.add_argument("--tipo", choices=["imaginar", "executar"], default=None,
                     help="só gravações deste tipo (padrão: todas)")
+    ap.add_argument("--sessoes", nargs="+", default=None, metavar="NOME",
+                    help="só estas gravações; aceita o começo do nome (SK_ pega SK_R1, SK_R2...)")
     ap.add_argument("--conferir", action="store_true", help="monta o dataset e para")
     a = ap.parse_args()
 
@@ -192,7 +197,7 @@ def main():
 
     X, y, origem = montar_dataset(usar_edf=not a.so_gravacoes,
                                   usar_gravacoes=not a.sem_gravacoes,
-                                  limite_sujeitos=a.sujeitos, tipo=a.tipo)
+                                  limite_sujeitos=a.sujeitos, tipo=a.tipo, sessoes=a.sessoes)
     contagem = np.bincount(y, minlength=len(cfg.CLASSES))
     print(f"\nDataset: {len(y)} janelas | "
           f"{ {cfg.CLASSES[i]: int(contagem[i]) for i in range(len(contagem))} }")

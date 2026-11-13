@@ -13,7 +13,7 @@ RAIZ = os.path.dirname(os.path.abspath(__file__))
 # =====================================================================
 # 1) HARDWARE
 # =====================================================================
-PORTA_EEG = "COM9"          # dongle da Cyton. Linux: "/dev/ttyUSB0"
+PORTA_EEG = "COM5"          # dongle da Cyton. Linux: "/dev/ttyUSB0"
 # ESP32 da órtese, pelo Bluetooth ou pelo cabo — o protocolo é o mesmo. Vazio: acha
 # sozinho o ESP32 pareado com o nome SERVO_BT_NOME; se não achar, lista e pergunta.
 # Para forçar uma porta (ex.: o cabo USB), escreva-a aqui: "COM11".
@@ -122,9 +122,9 @@ CLASSE_ACIONA = "right"           # qual classe fecha a órtese
 # (False), mudar REPOUSO exige mudar o .ino junto.
 SERVO_FIRMWARE_LIVRE = True       # False se o ESP32 estiver com o firmware_esp32 original
 SERVO_REPOUSO = 140               # para onde o 'C' leva o servo
-SERVO_AMPLITUDE = 10             # TETO do curso, em graus a partir do repouso. --amplitude só diminui
-SERVO_PASSO_GRAUS = 1             # 1 a 9. 1° é o menor passo que o protocolo do firmware aceita
-SERVO_INTERVALO_S = 0.01          # espera entre pulsos; a velocidade é passo / intervalo.
+SERVO_AMPLITUDE = 120             # TETO do curso, em graus a partir do repouso. --amplitude só diminui
+SERVO_PASSO_GRAUS = 10             # 1 a 9. 1° é o menor passo que o protocolo do firmware aceita
+SERVO_INTERVALO_S = 0.001          # espera entre pulsos; a velocidade é passo / intervalo.
                                   # Na linha de comando: --intervalo 0.02 (não muda o firmware)
 SERVO_SENTIDO_FECHA = "L"         # 'R' ou 'L' — descubra qual fecha a SUA montagem
 
@@ -136,7 +136,7 @@ ANGULO_FECHADO = (SERVO_REPOUSO + SERVO_AMPLITUDE if SERVO_SENTIDO_FECHA == "R"
 # indicador na montagem antiga. Confira o batente físico com a órtese VAZIA antes de
 # vestir: acima do limite mecânico a haste força a articulação. Para 40%, use 42 (14
 # pulsos); o passo de 3° só permite múltiplos de 3.
-LIMIAR = 0.70                     # probabilidade mínima para acionar
+LIMIAR = 0.80                     # probabilidade mínima para acionar
 # Medido em 6 runs contínuos do PhysioNet (44 cues, 740 s), passo de 0,25 s:
 #   limiar 0,60 -> 73% de detecção, 1 disparo falso a cada 16 s
 #   limiar 0,70 -> 68%,             1 a cada 29 s
