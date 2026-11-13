@@ -169,6 +169,31 @@ def relatorio(m):
     return acc, float(np.mean(f1s))
 
 
+def novo_modelo(continuar_de=None):
+    """A rede do config; com `continuar_de`, já com os pesos daquele checkpoint."""
+    modelo = CNN2D(len(cfg.CANAIS), len(cfg.CLASSES), cfg.AMOSTRAS,
+                   n_por_escala=cfg.CNN_FILTROS, kernels=cfg.CNN_KERNELS,
+                   depth=cfg.CNN_DEPTH, n_saida=cfg.CNN_SAIDA)
+    if continuar_de:
+        ck = torch.load(continuar_de, map_location="cpu", weights_only=False)
+        modelo.load_state_dict(ck["state_dict"])
+    return modelo
+
+
+def uma_epoca(modelo, carga, perda, otim):
+    """Uma passada pelo treino. Devolve (loss média, acurácia)."""
+    modelo.train()
+    soma, acertos, n = 0.0, 0, 0
+    for xb, yb in carga:
+        otim.zero_grad()
+        logits = modelo(xb)
+        L = perda(logits, yb)
+        L.backward(); otim.step()
+        soma += L.item() * len(xb)
+        acertos += int((logits.argmax(1) == yb).sum()); n += len(xb)
+    return soma / n, acertos / n
+
+
 def main():
     ap = argparse.ArgumentParser(description="Treina a CNN de motor imagery.")
     ap.add_argument("--saida", default=os.path.join(cfg.DIR_MODELOS, "cnn2d_novo.pt"))
@@ -184,6 +209,10 @@ def main():
                     help="só gravações deste tipo (padrão: todas)")
     ap.add_argument("--sessoes", nargs="+", default=None, metavar="NOME",
                     help="só estas gravações; aceita o começo do nome (SK_ pega SK_R1, SK_R2...)")
+    ap.add_argument("--final-com-tudo", action=argparse.BooleanOptionalAction,
+                    default=cfg.TREINO_FINAL_COM_TUDO,
+                    help="depois da validação, treina de novo com todas as janelas "
+                         "(padrão: config.TREINO_FINAL_COM_TUDO)")
     ap.add_argument("--conferir", action="store_true", help="monta o dataset e para")
     a = ap.parse_args()
 
@@ -207,18 +236,14 @@ def main():
         return
 
     tr, va = separar(origem * 10 + y, cfg.FRACAO_VALIDACAO, cfg.SEMENTE)
+    X_bruto = X                               # guardado para o modelo final, se houver
     mu, sd = preproc.estatistica(X[tr])       # estatística SÓ do treino
     X = preproc.normalizar(X, mu, sd)
 
-    modelo = CNN2D(len(cfg.CANAIS), len(cfg.CLASSES), cfg.AMOSTRAS,
-                   n_por_escala=cfg.CNN_FILTROS, kernels=cfg.CNN_KERNELS,
-                   depth=cfg.CNN_DEPTH, n_saida=cfg.CNN_SAIDA)
+    modelo = novo_modelo(a.continuar_de)
     n_par = sum(p.numel() for p in modelo.parameters())
     print(f"\nRede: {len(cfg.CNN_KERNELS)} escalas x {cfg.CNN_FILTROS} filtros | {n_par:,} parâmetros")
-
     if a.continuar_de:
-        ck = torch.load(a.continuar_de, map_location="cpu", weights_only=False)
-        modelo.load_state_dict(ck["state_dict"])
         print(f"Continuando de {os.path.basename(a.continuar_de)} — o original não é alterado")
 
     peso = None
@@ -237,20 +262,12 @@ def main():
     melhor, melhor_ep, melhor_pesos = 0.0, 0, None
     for ep in range(1, a.epocas + 1):
         t0 = time.time()
-        modelo.train()
-        soma, acertos, n = 0.0, 0, 0
-        for xb, yb in carga:
-            otim.zero_grad()
-            logits = modelo(xb)
-            L = perda(logits, yb)
-            L.backward(); otim.step()
-            soma += L.item() * len(xb)
-            acertos += int((logits.argmax(1) == yb).sum()); n += len(xb)
+        loss, acc = uma_epoca(modelo, carga, perda, otim)
         lv = em_lotes(modelo, Xv)
         with torch.no_grad():
             vperda = float(perda(lv, yv))
             vacc = float((lv.argmax(1) == yv).float().mean())
-        print(f"  época {ep:3d}/{a.epocas} | loss {soma/n:.4f} | treino {acertos/n*100:5.1f}% "
+        print(f"  época {ep:3d}/{a.epocas} | loss {loss:.4f} | treino {acc*100:5.1f}% "
               f"| val_loss {vperda:.4f} | validação {vacc*100:5.1f}% | {time.time()-t0:4.0f}s")
         if vacc >= melhor:
             melhor, melhor_ep = vacc, ep
@@ -262,15 +279,39 @@ def main():
     print(f"Melhor validação: {melhor*100:.1f}% (época {melhor_ep})")
     relatorio(matriz_confusao(y[va], pred))
 
+    if a.final_com_tudo:
+        # A validação já cumpriu o papel dela: escolher quantas épocas treinar. Agora o
+        # modelo recomeça do MESMO ponto de partida e treina com todas as janelas, inclusive
+        # as que ficaram de fora. Não sobra nada para medir este modelo: a estimativa de
+        # acurácia dele é a validação acima.
+        print(f"\nModelo final: {melhor_ep} épocas com TODAS as {len(y)} janelas "
+              f"(treino + validação), partindo do mesmo ponto")
+        print("-" * 74)
+        torch.manual_seed(cfg.SEMENTE); random.seed(cfg.SEMENTE); np.random.seed(cfg.SEMENTE)
+        mu, sd = preproc.estatistica(X_bruto)
+        modelo = novo_modelo(a.continuar_de)
+        otim = torch.optim.Adam(modelo.parameters(), lr=a.lr)
+        carga = torch.utils.data.DataLoader(Conjunto(preproc.normalizar(X_bruto, mu, sd), y, True),
+                                            batch_size=a.lote, shuffle=True)
+        for ep in range(1, melhor_ep + 1):
+            t0 = time.time()
+            loss, acc = uma_epoca(modelo, carga, perda, otim)
+            print(f"  época {ep:3d}/{melhor_ep} | loss {loss:.4f} | treino {acc*100:5.1f}% "
+                  f"| {time.time()-t0:4.0f}s")
+        modelo.eval()
+
     esquema = {"nome": "centrado-transicao", "meia_janela_s": cfg.MEIA_JANELA,
                "taxa": cfg.TAXA_IA, "canais": list(cfg.CANAIS),
-               "treinado_em": datetime.now().isoformat(timespec="seconds")}
+               "treinado_em": datetime.now().isoformat(timespec="seconds"),
+               "final_com_tudo": bool(a.final_com_tudo), "epocas": melhor_ep,
+               "validacao_estimada": round(melhor, 4)}
     os.makedirs(os.path.dirname(a.saida) or ".", exist_ok=True)
     torch.save({"state_dict": modelo.state_dict(), "arch": modelo.arch,
                 "n_canais": modelo.n_canais, "n_classes": modelo.n_classes,
                 "amostras": modelo.amostras, "norm_mu": mu, "norm_sd": sd,
                 "esquema": esquema}, a.saida)
-    print(f"\nModelo salvo em {a.saida}")
+    print(f"\nModelo salvo em {a.saida}"
+          + (" (treinado com todas as janelas)" if a.final_com_tudo else ""))
 
 
 if __name__ == "__main__":

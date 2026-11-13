@@ -93,6 +93,9 @@ LOTE = 16
 LOTE_VALIDACAO = 64               # só afeta o pico de RAM na validação
 TAXA_APRENDIZADO = 1e-3
 FRACAO_VALIDACAO = 0.2
+TREINO_FINAL_COM_TUDO = True      # após a validação escolher as épocas, treina de novo com
+                                  # treino + validação e salva ESSE modelo. --no-final-com-tudo
+                                  # salva o modelo da melhor época, sem rever a validação.
 PESO_POR_CLASSE = True            # compensa o desbalanceamento (rest é ~50% dos dados)
 SEMENTE = 40
 
